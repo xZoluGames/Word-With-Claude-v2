@@ -3,7 +3,10 @@ Sistema Avanzado de Marcas de Agua para Documentos - Versión Actualizada
 Compatible con diferentes versiones de python-docx
 Incluye configuraciones específicas de posición y tamaño
 """
-
+import tempfile
+import atexit
+from contextlib import contextmanager
+from typing import Optional, Dict, Any
 import os
 from typing import Optional
 from PIL import Image, ImageEnhance
@@ -30,6 +33,7 @@ class WatermarkManager:
     def __init__(self):
         self.default_opacity = 0.3
         self.default_position = 'header'
+        self._temp_files = set()
         
         # Configuración del encabezado
         self.header_config = {
@@ -47,69 +51,123 @@ class WatermarkManager:
             'align': 'center'
         }
         
-        logger.info("WatermarkManager inicializado")
+        # Registrar limpieza al salir
+        atexit.register(self._cleanup_all_temps)
         
-    @cached(ttl=86400, key_prefix="watermark")  # Cache por 24 horas
-    def process_image_for_watermark(self, image_path: str, opacity: float = None, 
-                                  width_inches: float = None) -> Optional[bytes]:
-        """
-        Procesa una imagen para usarla como marca de agua con cache.
-        
-        Args:
-            image_path: Ruta de la imagen
-            opacity: Opacidad (0.0-1.0)
-            width_inches: Ancho en pulgadas
+        logger.info("WatermarkManager inicializado con limpieza automática")
+
+    def _cleanup_all_temps(self):
+        """Limpia todos los archivos temporales al salir"""
+        for temp_file in self._temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+                    logger.debug(f"Archivo temporal eliminado: {temp_file}")
+            except Exception as e:
+                logger.debug(f"Error eliminando temporal: {e}")
+        self._temp_files.clear()
+    
+    @contextmanager
+    def _temp_image_file(self, image_data: bytes, suffix: str = '.png'):
+        """Context manager para archivos temporales seguros"""
+        temp_file = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='wb', suffix=suffix, delete=False
+            ) as temp_file:
+                temp_file.write(image_data)
+                temp_path = temp_file.name
+                self._temp_files.add(temp_path)
             
-        Returns:
-            bytes: Imagen procesada o None si hay error
+            yield temp_path
+            
+        finally:
+            # Limpiar inmediatamente si es posible
+            if temp_file and os.path.exists(temp_file.name):
+                try:
+                    os.unlink(temp_file.name)
+                    self._temp_files.discard(temp_file.name)
+                except Exception:
+                    pass  # Se limpiará en atexit
+
+    @cached(ttl=86400, key_prefix="watermark_v2")
+    def process_image_for_watermark(self, image_path: str, opacity: float = None, 
+                                  config: Dict[str, Any] = None) -> Optional[bytes]:
+        """
+        Procesa imagen con configuración mejorada y validación.
         """
         logger.debug(f"Procesando imagen para marca de agua: {image_path}")
         
         if opacity is None:
             opacity = self.default_opacity
         
+        # Validar parámetros
+        if not 0 <= opacity <= 1:
+            logger.warning(f"Opacidad fuera de rango: {opacity}, usando default")
+            opacity = self.default_opacity
+        
+        if not config:
+            config = self.header_config
+        
         try:
-            # Verificar que el archivo existe
+            # Verificar archivo
             if not os.path.exists(image_path):
                 logger.error(f"Archivo no encontrado: {image_path}")
                 return None
             
-            # Abrir imagen
-            img = Image.open(image_path)
-            logger.debug(f"Imagen abierta: {img.size}, modo: {img.mode}")
+            # Verificar tamaño del archivo
+            file_size = os.path.getsize(image_path)
+            if file_size > 10 * 1024 * 1024:  # 10MB
+                logger.warning(f"Imagen muy grande: {file_size / 1024 / 1024:.1f}MB")
             
-            # Convertir a RGBA si es necesario
-            if img.mode != 'RGBA':
-                img = img.convert('RGBA')
-                logger.debug("Imagen convertida a RGBA")
-            
-            # Redimensionar si se especifica ancho
-            if width_inches:
-                # Convertir pulgadas a píxeles (96 DPI)
-                width_px = int(width_inches * 96)
-                ratio = width_px / img.width
-                height_px = int(img.height * ratio)
-                img = img.resize((width_px, height_px), Image.Resampling.LANCZOS)
-                logger.debug(f"Imagen redimensionada a: {width_px}x{height_px}")
-            
-            # Aplicar transparencia
-            alpha = img.split()[-1]
-            alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
-            img.putalpha(alpha)
-            logger.debug(f"Transparencia aplicada: {opacity}")
-            
-            # Guardar en memoria
-            buffer = io.BytesIO()
-            img.save(buffer, format='PNG')
-            buffer.seek(0)
-            
-            result = buffer.getvalue()
-            logger.info(f"Imagen procesada exitosamente: {len(result)} bytes")
-            
-            return result
-            
+            # Abrir y procesar imagen
+            with Image.open(image_path) as img:
+                logger.debug(f"Imagen abierta: {img.size}, modo: {img.mode}")
+                
+                # Convertir a RGBA si es necesario
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                # Redimensionar si se especifica en config
+                if 'width' in config:
+                    # Calcular dimensiones manteniendo proporción
+                    width_cm = config['width'] / Cm(1)
+                    width_px = int(width_cm * 96 / 2.54)  # 96 DPI
+                    
+                    ratio = width_px / img.width
+                    height_px = int(img.height * ratio)
+                    
+                    # Limitar tamaño máximo
+                    max_dimension = 2000
+                    if width_px > max_dimension or height_px > max_dimension:
+                        scale = max_dimension / max(width_px, height_px)
+                        width_px = int(width_px * scale)
+                        height_px = int(height_px * scale)
+                    
+                    img = img.resize((width_px, height_px), Image.Resampling.LANCZOS)
+                    logger.debug(f"Imagen redimensionada a: {width_px}x{height_px}")
+                
+                # Aplicar transparencia
+                if opacity < 1.0:
+                    # Crear nueva imagen con transparencia
+                    img_with_alpha = img.copy()
+                    alpha = img_with_alpha.split()[-1]
+                    alpha = ImageEnhance.Brightness(alpha).enhance(opacity)
+                    img_with_alpha.putalpha(alpha)
+                    img = img_with_alpha
+                
+                # Optimizar imagen
+                buffer = io.BytesIO()
+                img.save(buffer, format='PNG', optimize=True)
+                buffer.seek(0)
+                
+                result = buffer.getvalue()
+                logger.info(f"Imagen procesada: {len(result) / 1024:.1f}KB")
+                
+                return result
+                
         except Exception as e:
-            logger.error(f"Error procesando imagen para marca de agua: {e}", exc_info=True)
+            logger.error(f"Error procesando imagen: {e}", exc_info=True)
             return None
     
     def configurar_imagen_detras_texto(self, picture, config: dict = None):
@@ -190,87 +248,85 @@ class WatermarkManager:
             raise
     
     def add_watermark_to_section(self, section, image_path: str, 
-                               opacity: float = 0.3, stretch: bool = True) -> bool:
+                               opacity: float = None, stretch: bool = True,
+                               mode: str = 'watermark') -> bool:
         """
-        Agrega marca de agua a una sección del documento.
+        Agrega marca de agua con modo mejorado.
+        """
+        logger.info(f"Agregando marca de agua - Modo: {mode}, Opacidad: {opacity}")
         
-        Args:
-            section: Sección del documento
-            image_path: Ruta de la imagen
-            opacity: Opacidad (0.0-1.0)
-            stretch: Si estirar la imagen
-            
-        Returns:
-            bool: True si se agregó exitosamente
-        """
-        logger.info(f"Agregando marca de agua a sección: {image_path}")
+        if opacity is None:
+            opacity = self.default_opacity
         
         try:
-            # Verificar que la imagen existe
-            if not os.path.exists(image_path):
-                logger.error(f"Imagen no encontrada: {image_path}")
-                return False
-            
+            # Procesar imagen según modo
+            if mode == 'watermark' and opacity < 1.0:
+                # Procesar con transparencia
+                processed_image = self.process_image_for_watermark(
+                    image_path, opacity, self.header_config
+                )
+                
+                if processed_image:
+                    # Usar imagen procesada
+                    with self._temp_image_file(processed_image) as temp_path:
+                        return self._add_image_to_header(section, temp_path, stretch)
+                else:
+                    logger.warning("Fallo al procesar imagen, usando original")
+                    return self._add_image_to_header(section, image_path, stretch)
+            else:
+                # Modo normal sin transparencia
+                return self._add_image_to_header(section, image_path, stretch)
+                
+        except Exception as e:
+            logger.error(f"Error agregando marca de agua: {e}", exc_info=True)
+            return False
+    def _add_image_to_header(self, section, image_path: str, stretch: bool) -> bool:
+        """Método interno para agregar imagen al header"""
+        try:
             # Configurar sección
             section.header_distance = Cm(1.25)
             section.footer_distance = Cm(1.25)
             
-            # Obtener header
+            # Obtener o crear header
             header = section.header
-            
-            # Limpiar header existente si es necesario
             if not header.paragraphs:
                 header_para = header.add_paragraph()
             else:
                 header_para = header.paragraphs[0]
+                # Limpiar contenido existente
+                for run in header_para.runs:
+                    run.clear()
             
             # Configurar alineación
             header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             
-            # Agregar la imagen
+            # Agregar imagen
             run = header_para.add_run()
             
-            # Usar imagen procesada del cache
             if stretch:
-                width_cm = self.header_config['width'] / Cm(1)
-                processed_image = self.process_image_for_watermark(
-                    image_path, opacity, width_cm / 2.54
-                )
-                
-                if processed_image:
-                    # Guardar temporalmente para python-docx
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
-                        tmp.write(processed_image)
-                        tmp_path = tmp.name
-                    
-                    try:
-                        header_pic = run.add_picture(tmp_path, width=self.header_config['width'])
-                        os.unlink(tmp_path)  # Limpiar archivo temporal
-                    except Exception as e:
-                        logger.error(f"Error agregando imagen procesada: {e}")
-                        if os.path.exists(tmp_path):
-                            os.unlink(tmp_path)
-                        raise
-                else:
-                    # Usar imagen original si falla el procesamiento
-                    header_pic = run.add_picture(image_path, width=self.header_config['width'])
-            else:
                 header_pic = run.add_picture(image_path, width=self.header_config['width'])
+            else:
+                # Mantener proporción original
+                header_pic = run.add_picture(image_path)
+                
+                # Ajustar si es muy grande
+                if header_pic.width > self.header_config['width']:
+                    ratio = self.header_config['width'] / header_pic.width
+                    header_pic.width = self.header_config['width']
+                    header_pic.height = int(header_pic.height * ratio)
             
-            # Configurar posición detrás del texto
+            # Intentar configurar detrás del texto
             try:
                 self.configurar_imagen_detras_texto(header_pic, self.header_config)
-                logger.info("✅ Marca de agua agregada con posicionamiento avanzado")
-                return True
+                logger.info("✅ Imagen configurada detrás del texto")
             except Exception as e:
-                logger.warning(f"⚠️ Error en posicionamiento avanzado, usando alternativo: {e}")
-                return self._add_watermark_alternative(header_para, image_path, opacity, stretch)
+                logger.warning(f"⚠️ No se pudo configurar detrás del texto: {e}")
+            
+            return True
             
         except Exception as e:
-            logger.error(f"Error agregando marca de agua: {e}", exc_info=True)
+            logger.error(f"Error agregando imagen al header: {e}")
             return False
-    
     def add_logo_to_first_page(self, doc, logo_path: str) -> bool:
         """
         Agrega logo/insignia a la primera página.

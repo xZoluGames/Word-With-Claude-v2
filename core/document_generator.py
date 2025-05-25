@@ -6,7 +6,10 @@ logger = get_logger("document_generator")
 """
 Generador de documentos Word - Versión Corregida con Encabezados como Marca de Agua y sangría APA perfecta
 """
-
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+import tempfile
+from contextlib import contextmanager
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING, WD_BREAK
@@ -34,92 +37,180 @@ class DocumentGenerator:
             'sangria': True
         }
         self.watermark_manager = WatermarkManager()
+        self._executor = ThreadPoolExecutor(max_workers=2)
+        self._temp_files = []
 
+    def __del__(self):
+        """Limpieza de recursos"""
+        self._executor.shutdown(wait=False)
+        self._cleanup_temp_files()
+
+    def _cleanup_temp_files(self):
+        """Limpia archivos temporales"""
+        for temp_file in self._temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+            except Exception as e:
+                logger.debug(f"Error eliminando archivo temporal: {e}")
+        self._temp_files.clear()
+
+    @contextmanager
+    def _temp_document(self):
+        """Context manager para documento temporal"""
+        doc = Document()
+        try:
+            yield doc
+        finally:
+            # Limpieza si es necesaria
+            pass
+
+    @lru_cache(maxsize=32)
     def normalizar_parrafos(self, contenido):
         """
-        Convierte saltos simples de línea en dobles saltos, salvo que ya existan dobles saltos.
-        Así, cada párrafo quedará correctamente separado para el procesamiento en Word.
+        Normaliza párrafos con cache para contenido repetido.
+        Mejorado para manejar diferentes formatos de entrada.
         """
+        if not contenido:
+            return ""
+        
         texto = contenido.strip()
-        # Si ya hay dobles saltos, no hagas nada
+        
+        # Si ya tiene dobles saltos, validar formato
         if '\n\n' in texto:
+            # Limpiar saltos excesivos (más de 2)
+            texto = re.sub(r'\n{3,}', '\n\n', texto)
             return texto
-        # Si no, cada salto simple equivale a un nuevo párrafo
+        
+        # Detectar si es una lista
         lineas = texto.split('\n')
-        # Une cada línea como un párrafo separado, descartando líneas vacías
-        return '\n\n'.join([linea.strip() for linea in lineas if linea.strip()])
+        es_lista = any(
+            linea.strip().startswith(('•', '-', '*', '1.', '2.', '3.'))
+            for linea in lineas if linea.strip()
+        )
+        
+        if es_lista:
+            # Mantener formato de lista pero asegurar espaciado
+            return '\n'.join(linea for linea in lineas if linea.strip())
+        
+        # Para texto normal, convertir saltos simples en párrafos
+        parrafos = []
+        parrafo_actual = []
+        
+        for linea in lineas:
+            linea = linea.strip()
+            if not linea:
+                if parrafo_actual:
+                    parrafos.append(' '.join(parrafo_actual))
+                    parrafo_actual = []
+            else:
+                parrafo_actual.append(linea)
+        
+        if parrafo_actual:
+            parrafos.append(' '.join(parrafo_actual))
+        
+        return '\n\n'.join(parrafos)
 
     def generar_documento_async(self, app_instance):
-        """Genera el documento profesional en un hilo separado"""
+        """Versión mejorada con mejor manejo de errores y progreso"""
+        def _progress_callback(valor, mensaje=""):
+            """Actualiza progreso de forma segura"""
+            try:
+                app_instance.root.after(0, lambda: app_instance.progress.set(valor))
+                if mensaje and hasattr(app_instance, 'status_label'):
+                    app_instance.root.after(0, 
+                        lambda: app_instance.status_label.configure(text=mensaje))
+            except Exception as e:
+                logger.debug(f"Error actualizando progreso: {e}")
+
         def generar():
             try:
-                app_instance.progress.set(0)
-                app_instance.progress.start()
+                logger.info("Iniciando generación de documento")
+                _progress_callback(0, "Iniciando generación...")
                 
-                doc = Document()
+                # Validar antes de generar
+                if not app_instance.validator.validar_proyecto(app_instance):
+                    if not messagebox.askyesno("⚠️ Validación", 
+                        "El proyecto tiene errores. ¿Generar de todos modos?"):
+                        _progress_callback(0, "Generación cancelada")
+                        return
                 
-                self.configurar_documento_completo(doc, app_instance)
-                app_instance.progress.set(0.1)
-                
-                # Portada
-                if app_instance.incluir_portada.get():
-                    self.crear_portada_profesional(doc, app_instance)
-                    app_instance.progress.set(0.2)
-                
-                # Agradecimientos
-                if app_instance.incluir_agradecimientos.get():
-                    contenido_agradecimientos = "(Agregar agradecimientos personalizados aquí)"
-                    contenido_agradecimientos = self.normalizar_parrafos(contenido_agradecimientos)
-                    self.crear_seccion_profesional(
-                        doc, "AGRADECIMIENTOS", contenido_agradecimientos, app_instance, nivel=1, aplicar_sangria_parrafos=False
+                with self._temp_document() as doc:
+                    # Configuración inicial
+                    _progress_callback(0.1, "Configurando documento...")
+                    self.configurar_documento_completo(doc, app_instance)
+                    
+                    # Portada
+                    if app_instance.incluir_portada.get():
+                        _progress_callback(0.2, "Creando portada...")
+                        self.crear_portada_profesional(doc, app_instance)
+                    
+                    # Agradecimientos
+                    if app_instance.incluir_agradecimientos.get():
+                        _progress_callback(0.3, "Agregando agradecimientos...")
+                        contenido_agradecimientos = self._get_agradecimientos_default()
+                        self.crear_seccion_profesional(
+                            doc, "AGRADECIMIENTOS", contenido_agradecimientos, 
+                            app_instance, nivel=1, aplicar_sangria_parrafos=False
+                        )
+                    
+                    # Resumen
+                    if self._tiene_resumen(app_instance):
+                        _progress_callback(0.4, "Procesando resumen...")
+                        contenido_resumen = app_instance.content_texts['resumen'].get("1.0", "end")
+                        contenido_resumen = self.normalizar_parrafos(contenido_resumen)
+                        self.crear_seccion_profesional(
+                            doc, "RESUMEN", contenido_resumen, app_instance, 
+                            nivel=1, aplicar_sangria_parrafos=False
+                        )
+                    
+                    # Índice
+                    if app_instance.incluir_indice.get():
+                        _progress_callback(0.5, "Generando índice...")
+                        self.crear_indice_profesional(doc, app_instance)
+                    
+                    # Contenido principal
+                    _progress_callback(0.6, "Procesando contenido principal...")
+                    self.crear_contenido_dinamico_mejorado(doc, app_instance)
+                    
+                    # Referencias
+                    _progress_callback(0.8, "Agregando referencias...")
+                    self.crear_referencias_profesionales(doc, app_instance)
+                    
+                    # Guardar documento
+                    _progress_callback(0.9, "Guardando documento...")
+                    filename = filedialog.asksaveasfilename(
+                        defaultextension=".docx",
+                        filetypes=[("Word documents", "*.docx")],
+                        title="Guardar Proyecto Académico Profesional",
+                        initialfile=self._generar_nombre_archivo(app_instance)
                     )
-                    app_instance.progress.set(0.3)
+                    
+                    if filename:
+                        doc.save(filename)
+                        _progress_callback(1.0, "¡Documento generado exitosamente!")
+                        
+                        # Limpiar archivos temporales
+                        self._cleanup_temp_files()
+                        
+                        self.mostrar_mensaje_exito(filename, app_instance)
+                        
+                        # Abrir documento si el usuario lo desea
+                        if messagebox.askyesno("📄 Abrir Documento", 
+                            "¿Deseas abrir el documento generado?"):
+                            self._abrir_documento(filename)
+                    else:
+                        _progress_callback(0, "Generación cancelada")
                 
-                # Resumen
-                if 'resumen' in app_instance.secciones_activas and 'resumen' in app_instance.content_texts:
-                    contenido_resumen = app_instance.content_texts['resumen'].get("1.0", "end")
-                    contenido_resumen = self.normalizar_parrafos(contenido_resumen)
-                    self.crear_seccion_profesional(
-                        doc, "RESUMEN", contenido_resumen, app_instance, nivel=1, aplicar_sangria_parrafos=False
-                    )
-                    app_instance.progress.set(0.4)
-                
-                # Índice
-                if app_instance.incluir_indice.get():
-                    self.crear_indice_profesional(doc, app_instance)
-                    app_instance.progress.set(0.5)
-                
-                # Contenido principal dinámico
-                self.crear_contenido_dinamico_mejorado(doc, app_instance)
-                app_instance.progress.set(0.8)
-                
-                # Referencias
-                self.crear_referencias_profesionales(doc, app_instance)
-                app_instance.progress.set(0.9)
-                
-                # Guardar documento
-                filename = filedialog.asksaveasfilename(
-                    defaultextension=".docx",
-                    filetypes=[("Word documents", "*.docx")],
-                    title="Guardar Proyecto Académico Profesional"
-                )
-                
-                if filename:
-                    doc.save(filename)
-                    app_instance.progress.stop()
-                    app_instance.progress.set(1)
-                    self.mostrar_mensaje_exito(filename, app_instance)
-                else:
-                    app_instance.progress.stop()
-                    app_instance.progress.set(0)
-            
             except Exception as e:
-                app_instance.progress.stop()
-                app_instance.progress.set(0)
-                messagebox.showerror("❌ Error", f"Error al generar documento:\n{str(e)}")
+                logger.error(f"Error generando documento: {e}", exc_info=True)
+                _progress_callback(0, "Error en la generación")
+                messagebox.showerror("❌ Error", 
+                    f"Error al generar documento:\n{str(e)}\n\n"
+                    "Revisa el log para más detalles.")
         
-        thread = threading.Thread(target=generar)
-        thread.daemon = True
+        # Ejecutar en thread
+        thread = threading.Thread(target=generar, daemon=True)
         thread.start()
     
     def configurar_documento_completo(self, doc, app_instance):
@@ -514,7 +605,44 @@ class DocumentGenerator:
             return (getattr(app_instance, 'insignia_personalizada', None) or 
                    getattr(app_instance, 'ruta_insignia', None))
         return None
-    
+    def _tiene_resumen(self, app_instance):
+        """Verifica si existe resumen con contenido"""
+        return ('resumen' in app_instance.secciones_activas and 
+                'resumen' in app_instance.content_texts and
+                app_instance.content_texts['resumen'].get("1.0", "end").strip())
+
+    def _get_agradecimientos_default(self):
+        """Obtiene texto por defecto para agradecimientos"""
+        return ("A mis tutores, por su invaluable guía y apoyo constante.\n\n"
+                "A mi familia, por su comprensión y motivación.\n\n"
+                "A la institución, por brindarme las herramientas necesarias "
+                "para desarrollar este proyecto.")
+
+    def _generar_nombre_archivo(self, app_instance):
+        """Genera nombre de archivo sugerido"""
+        titulo = app_instance.proyecto_data.get('titulo', {})
+        if hasattr(titulo, 'get'):
+            titulo = titulo.get()
+        
+        if titulo:
+            # Limpiar título para nombre de archivo
+            nombre = re.sub(r'[^\w\s-]', '', titulo)
+            nombre = re.sub(r'[-\s]+', '_', nombre)
+            return f"{nombre[:50]}.docx"
+        
+        return f"proyecto_academico_{datetime.now().strftime('%Y%m%d')}.docx"
+
+    def _abrir_documento(self, filepath):
+        """Abre el documento en el programa predeterminado"""
+        try:
+            if sys.platform.startswith('darwin'):
+                os.system(f'open "{filepath}"')
+            elif sys.platform.startswith('win'):
+                os.startfile(filepath)
+            else:  # linux
+                os.system(f'xdg-open "{filepath}"')
+        except Exception as e:
+            logger.error(f"Error abriendo documento: {e}")
     def mostrar_mensaje_exito(self, filename, app_instance):
         app_instance.validation_text.delete("1.0", "end")
         app_instance.validation_text.insert("1.0", 

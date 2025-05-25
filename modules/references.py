@@ -81,7 +81,148 @@ class ReferenceManager:
                 'campos_requeridos': ['autor', 'año', 'titulo', 'institucion']
             }
         }
-    
+    def exportar_bibtex(self, archivo: str = None) -> str:
+        """
+        Exporta referencias en formato BibTeX.
+        
+        Args:
+            archivo: Ruta del archivo a guardar (opcional)
+            
+        Returns:
+            str: Contenido BibTeX
+        """
+        bibtex_entries = []
+        
+        for i, ref in enumerate(self.referencias):
+            # Determinar tipo BibTeX
+            tipo_map = {
+                'Libro': 'book',
+                'Artículo': 'article',
+                'Web': 'misc',
+                'Tesis': 'phdthesis',
+                'Conferencia': 'inproceedings',
+                'Informe': 'techreport'
+            }
+            
+            bibtex_type = tipo_map.get(ref.get('tipo', 'Libro'), 'misc')
+            
+            # Generar clave única
+            autor_key = ref['autor'].split(',')[0].replace(' ', '').lower()
+            year_key = ref.get('año', 'nodate')
+            entry_key = f"{autor_key}{year_key}{i}"
+            
+            # Construir entrada BibTeX
+            entry = f"@{bibtex_type}{{{entry_key},\n"
+            entry += f"  author = {{{ref['autor']}}},\n"
+            entry += f"  title = {{{ref['titulo']}}},\n"
+            entry += f"  year = {{{ref['año']}}},\n"
+            
+            if bibtex_type == 'book':
+                entry += f"  publisher = {{{ref.get('fuente', 'Unknown')}}},\n"
+            elif bibtex_type == 'article':
+                entry += f"  journal = {{{ref.get('fuente', 'Unknown')}}},\n"
+            elif bibtex_type == 'misc' and ref.get('tipo') == 'Web':
+                entry += f"  url = {{{ref.get('fuente', '')}}},\n"
+                entry += f"  note = {{Accessed: {datetime.now().strftime('%Y-%m-%d')}}},\n"
+            
+            entry = entry.rstrip(',\n') + "\n}"
+            bibtex_entries.append(entry)
+        
+        bibtex_content = '\n\n'.join(bibtex_entries)
+        
+        # Guardar si se especifica archivo
+        if archivo:
+            with open(archivo, 'w', encoding='utf-8') as f:
+                f.write(bibtex_content)
+            logger.info(f"Referencias exportadas a BibTeX: {archivo}")
+        
+        return bibtex_content
+
+    def fusionar_referencias(self, otras_referencias: List[Dict]) -> int:
+        """
+        Fusiona referencias evitando duplicados.
+        
+        Args:
+            otras_referencias: Lista de referencias a fusionar
+            
+        Returns:
+            int: Número de referencias agregadas
+        """
+        agregadas = 0
+        
+        for ref in otras_referencias:
+            # Verificar si ya existe
+            existe = False
+            for ref_existente in self.referencias:
+                if (ref_existente['autor'] == ref.get('autor') and
+                    ref_existente['año'] == ref.get('año') and
+                    ref_existente['titulo'] == ref.get('titulo')):
+                    existe = True
+                    break
+            
+            if not existe:
+                try:
+                    self.agregar_referencia(ref)
+                    agregadas += 1
+                except Exception as e:
+                    logger.warning(f"No se pudo agregar referencia: {e}")
+        
+        logger.info(f"Referencias fusionadas: {agregadas} de {len(otras_referencias)}")
+        return agregadas
+
+    def detectar_duplicados(self) -> List[Tuple[int, int]]:
+        """
+        Detecta posibles referencias duplicadas.
+        
+        Returns:
+            List[Tuple[int, int]]: Pares de índices de posibles duplicados
+        """
+        duplicados = []
+        
+        for i in range(len(self.referencias)):
+            for j in range(i + 1, len(self.referencias)):
+                ref1 = self.referencias[i]
+                ref2 = self.referencias[j]
+                
+                # Comparar por similitud
+                if self._son_duplicados(ref1, ref2):
+                    duplicados.append((i, j))
+        
+        return duplicados
+
+    def _son_duplicados(self, ref1: Dict, ref2: Dict) -> bool:
+        """
+        Determina si dos referencias son duplicadas.
+        
+        Usa comparación fuzzy para detectar variaciones menores.
+        """
+        # Comparación exacta primero
+        if (ref1['autor'] == ref2['autor'] and
+            ref1['año'] == ref2['año'] and
+            ref1['titulo'] == ref2['titulo']):
+            return True
+        
+        # Comparación fuzzy (requiere instalar python-Levenshtein)
+        try:
+            from difflib import SequenceMatcher
+            
+            # Similitud de autor
+            autor_sim = SequenceMatcher(None, ref1['autor'], ref2['autor']).ratio()
+            
+            # Similitud de título
+            titulo_sim = SequenceMatcher(None, 
+                                    ref1['titulo'].lower(), 
+                                    ref2['titulo'].lower()).ratio()
+            
+            # Mismo año y alta similitud en autor y título
+            if (ref1['año'] == ref2['año'] and 
+                autor_sim > 0.85 and titulo_sim > 0.85):
+                return True
+                
+        except ImportError:
+            pass
+        
+        return False
     def agregar_referencia(self, ref_data: Dict[str, str]) -> Dict[str, any]:
         """
         Agrega una nueva referencia con validación completa.

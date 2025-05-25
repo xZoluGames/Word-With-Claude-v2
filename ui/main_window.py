@@ -30,27 +30,76 @@ class ProyectoAcademicoGenerator:
     """Clase principal del generador de proyectos académicos"""
     
     def __init__(self):
-        self.root = ctk.CTk()
-        self.root.title("🎓 Generador de Proyectos Académicos - Versión Avanzada")
-        self.root.geometry("1200x700")
-        self.root.minsize(1000, 600)
-        
-        # MOVER _init_variables() ANTES de _init_state_manager()
-        self._init_variables()  # Mover esta línea aquí
-        self._init_managers()
-        self._init_state_manager()  # Ahora puede acceder a formato_config
-        self._init_ui_components()
-        
-        # Configurar ventana y UI
-        self.configurar_ventana_responsiva()
-        self.configurar_atajos_accesibilidad()
-        self.setup_ui()
-        self.setup_keyboard_shortcuts()
-        
-        # Iniciar servicios
-        self.mostrar_bienvenida()
-        self.actualizar_estadisticas()
-        self.project_manager.auto_save_project(self)
+        """Inicialización mejorada con orden correcto y manejo de errores"""
+        try:
+            self.root = ctk.CTk()
+            self.root.title("🎓 Generador de Proyectos Académicos - Versión Avanzada")
+            self.root.geometry("1200x700")
+            self.root.minsize(1000, 600)
+            
+            # ORDEN CORRECTO: Variables primero
+            self._init_variables()
+            self._init_managers()
+            self._init_state_manager()
+            self._init_ui_components()
+            
+            # Configurar ventana y UI
+            self.configurar_ventana_responsiva()
+            self.configurar_atajos_accesibilidad()
+            self.setup_ui()
+            self.setup_keyboard_shortcuts()
+            
+            # Configurar cierre seguro
+            self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+            
+            # Iniciar servicios
+            self.mostrar_bienvenida()
+            self.actualizar_estadisticas()
+            self.project_manager.auto_save_project(self)
+            
+            logger.info("Ventana principal inicializada correctamente")
+            
+        except Exception as e:
+            logger.error(f"Error inicializando ventana principal: {e}", exc_info=True)
+            messagebox.showerror("Error de Inicialización", 
+                f"No se pudo inicializar la aplicación:\n{str(e)}")
+            raise
+    def _on_closing(self):
+        """Maneja el cierre seguro de la aplicación"""
+        try:
+            # Verificar cambios sin guardar
+            if state_manager.has_changes():
+                respuesta = messagebox.askyesnocancel(
+                    "Cambios sin guardar",
+                    "Hay cambios sin guardar. ¿Deseas guardarlos antes de salir?"
+                )
+                
+                if respuesta is None:  # Cancelar
+                    return
+                elif respuesta:  # Sí, guardar
+                    self.guardar_proyecto()
+            
+            # Limpiar recursos
+            logger.info("Cerrando aplicación...")
+            
+            # Detener auto-guardado
+            if hasattr(self, '_autosave_job'):
+                self.root.after_cancel(self._autosave_job)
+            
+            # Limpiar cache
+            if hasattr(self, 'watermark_manager'):
+                self.watermark_manager.clear_cache()
+            
+            # Cerrar ventanas secundarias
+            for widget in self.root.winfo_children():
+                if isinstance(widget, ctk.CTkToplevel):
+                    widget.destroy()
+            
+            self.root.quit()
+            
+        except Exception as e:
+            logger.error(f"Error durante el cierre: {e}")
+            self.root.quit()
     def _init_state_manager(self):
         """Inicializa y configura el gestor de estado centralizado."""
         from utils.logger import get_logger
@@ -524,11 +573,64 @@ class ProyectoAcademicoGenerator:
         
         self.anunciar_estado(f"Zoom: {int(self.font_manager.get_current_scale() * 100)}%")
     
-    def _actualizar_fuentes_recursivo(self, widget):
+    def _actualizar_fuentes_recursivo(self, widget, nivel=0):
         """Actualiza fuentes recursivamente en widgets hijos"""
-        # Implementación simplificada
-        pass
-    
+        try:
+            # Limitar profundidad para evitar recursión infinita
+            if nivel > 10:
+                return
+            
+            # Actualizar fuente del widget actual si tiene configuración de fuente
+            if hasattr(widget, 'configure'):
+                try:
+                    # Determinar tipo de fuente según el widget
+                    if isinstance(widget, ctk.CTkLabel):
+                        current_font = widget.cget("font")
+                        if current_font:
+                            # Mantener el peso (bold/normal) pero actualizar tamaño
+                            weight = "bold" if "bold" in str(current_font).lower() else "normal"
+                            size_type = self._get_font_size_type(widget)
+                            widget.configure(font=self.font_manager.get_font(size_type, weight))
+                    
+                    elif isinstance(widget, ctk.CTkButton):
+                        widget.configure(font=self.font_manager.get_font("small", "bold"))
+                    
+                    elif isinstance(widget, ctk.CTkEntry):
+                        widget.configure(font=self.font_manager.get_font("normal"))
+                    
+                    elif isinstance(widget, ctk.CTkTextbox):
+                        widget.configure(font=self.font_manager.get_font("normal"))
+                        
+                except Exception as e:
+                    logger.debug(f"No se pudo actualizar fuente para {type(widget)}: {e}")
+            
+            # Actualizar hijos
+            if hasattr(widget, 'winfo_children'):
+                for child in widget.winfo_children():
+                    self._actualizar_fuentes_recursivo(child, nivel + 1)
+                    
+        except Exception as e:
+            logger.error(f"Error actualizando fuentes recursivamente: {e}")
+
+    def _get_font_size_type(self, widget):
+        """Determina el tipo de tamaño de fuente según el widget"""
+        # Buscar en el texto del widget para determinar el tipo
+        try:
+            text = widget.cget("text") if hasattr(widget, 'cget') else ""
+            
+            # Títulos principales
+            if any(word in str(text) for word in ["GENERADOR", "PROYECTO", "ACADÉMICO"]):
+                return "title"
+            # Subtítulos
+            elif any(char in str(text) for char in ["📋", "📝", "📚", "🎨", "🔧"]):
+                return "large"
+            # Etiquetas pequeñas
+            elif ":" in str(text) or len(str(text)) < 20:
+                return "small"
+            else:
+                return "normal"
+        except:
+            return "normal"
     def anunciar_estado(self, mensaje):
         """Anuncia un mensaje de estado para accesibilidad"""
         if hasattr(self, 'status_label'):
