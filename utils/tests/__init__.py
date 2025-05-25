@@ -1,1 +1,0 @@
-"""Tests para el Generador de Proyectos Académicos"""
