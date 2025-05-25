@@ -1,0 +1,9 @@
+{
+  "titulo": "Ejemplo de Proyecto Académico",
+  "descripcion": "Este es un proyecto de ejemplo con todas las secciones",
+  "secciones": {
+    "introduccion": "La introducción debe presentar el tema...",
+    "objetivos": "Objetivo General:\\nIdentificar...\\n\\nObjetivos Específicos:\\n1. Determinar...\\n2. Analizar...",
+    "marco_teorico": "Según García (2020), [CITA:parafraseo:García:2020]..."
+  }
+}

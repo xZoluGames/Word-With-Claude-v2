@@ -1,0 +1,198 @@
+{
+  "version": "2.0",
+  "fecha_creacion": "2025-05-24T19:53:21.866989",
+  "informacion_general": {
+    "institucion": "COLEGIO PRIVADO DIVINA ESPERANZA",
+    "titulo": "Hdsfdsf",
+    "categoria": "Nose",
+    "ciclo": "Tercer año",
+    "curso": "3 BTI",
+    "enfasis": "Tecnología",
+    "area": "Ciencias",
+    "estudiantes": "Jose, Alex,Maria,Ronaldo,Arturo, Diego, Analia, Marcos, Maria",
+    "tutores": "Jose,Alex, Maria, Ronaldo, Arturo, Diego, Analia, Marcos,Maria",
+    "director": "Cristina Raichakowski",
+    "responsable": "Jose,Alex,Maria,Ronaldo, Arturo, Diego, Analia, Marcos, Maria"
+  },
+  "contenido_secciones": {
+    "resumen": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n\n",
+    "introduccion": "Hola, texto relleno, probando jaja hola hola que tal texto prueba este word va a ser genial luego, espero te guste, ya se va llenando mi parrafo :C\nSegundo parrafo.\n\n\n\n\n",
+    "planteamiento": "Hola, texto relleno, probando jaja hola hola que tal texto prueba este word va a ser genial luego, espero te guste, ya se va llenando mi parrafo :C\nSegundo parrafo.\n\n\n\n\n\n",
+    "preguntas": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n\n",
+    "delimitaciones": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n",
+    "justificacion": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n",
+    "objetivos": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n",
+    "marco_teorico": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n[CITA:parafraseo:Silva Alex:2025] \n",
+    "metodologia": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n\n",
+    "desarrollo": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n\n",
+    "resultados": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n\n",
+    "analisis_datos": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n",
+    "discusion": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n\n",
+    "conclusiones": "Este texto es una prueba de que no funciona la sangria correctamente, :C.\nYo tambien quiero sangria :C.\n\n\n\n\n"
+  },
+  "referencias": [],
+  "secciones_activas": [
+    "resumen",
+    "introduccion",
+    "capitulo1",
+    "planteamiento",
+    "preguntas",
+    "delimitaciones",
+    "justificacion",
+    "objetivos",
+    "capitulo2",
+    "marco_teorico",
+    "capitulo3",
+    "metodologia",
+    "capitulo4",
+    "desarrollo",
+    "capitulo5",
+    "resultados",
+    "analisis_datos",
+    "capitulo6",
+    "discusion",
+    "conclusiones"
+  ],
+  "secciones_disponibles": {
+    "resumen": {
+      "titulo": "📄 Resumen",
+      "instruccion": "Resumen ejecutivo del proyecto (150-300 palabras)",
+      "requerida": false,
+      "capitulo": false
+    },
+    "introduccion": {
+      "titulo": "🔍 Introducción",
+      "instruccion": "Presenta el tema, contexto e importancia",
+      "requerida": true,
+      "capitulo": false
+    },
+    "capitulo1": {
+      "titulo": "📖 CAPÍTULO I",
+      "instruccion": "Título de capítulo",
+      "requerida": false,
+      "capitulo": true
+    },
+    "planteamiento": {
+      "titulo": "❓ Planteamiento del Problema",
+      "instruccion": "Define el problema a investigar",
+      "requerida": true,
+      "capitulo": false
+    },
+    "preguntas": {
+      "titulo": "❔ Preguntas de Investigación",
+      "instruccion": "Pregunta general y específicas",
+      "requerida": true,
+      "capitulo": false
+    },
+    "delimitaciones": {
+      "titulo": "📏 Delimitaciones",
+      "instruccion": "Límites del estudio (temporal, espacial, conceptual)",
+      "requerida": false,
+      "capitulo": false
+    },
+    "justificacion": {
+      "titulo": "💡 Justificación",
+      "instruccion": "Explica por qué es importante investigar",
+      "requerida": true,
+      "capitulo": false
+    },
+    "objetivos": {
+      "titulo": "🎯 Objetivos",
+      "instruccion": "General y específicos (verbos en infinitivo)",
+      "requerida": true,
+      "capitulo": false
+    },
+    "capitulo2": {
+      "titulo": "📚 CAPÍTULO II - ESTADO DEL ARTE",
+      "instruccion": "Título de capítulo",
+      "requerida": false,
+      "capitulo": true
+    },
+    "marco_teorico": {
+      "titulo": "📖 Marco Teórico",
+      "instruccion": "Base teórica y antecedentes (USA CITAS)",
+      "requerida": true,
+      "capitulo": false
+    },
+    "capitulo3": {
+      "titulo": "🔬 CAPÍTULO III",
+      "instruccion": "Título de capítulo",
+      "requerida": false,
+      "capitulo": true
+    },
+    "metodologia": {
+      "titulo": "⚙️ Marco Metodológico",
+      "instruccion": "Tipo de estudio y técnicas de recolección",
+      "requerida": true,
+      "capitulo": false
+    },
+    "capitulo4": {
+      "titulo": "🛠️ CAPÍTULO IV - DESARROLLO",
+      "instruccion": "Título de capítulo",
+      "requerida": false,
+      "capitulo": true
+    },
+    "desarrollo": {
+      "titulo": "⚙️ Desarrollo",
+      "instruccion": "Proceso de investigación paso a paso",
+      "requerida": false,
+      "capitulo": false
+    },
+    "capitulo5": {
+      "titulo": "📊 CAPÍTULO V - ANÁLISIS DE DATOS",
+      "instruccion": "Título de capítulo",
+      "requerida": false,
+      "capitulo": true
+    },
+    "resultados": {
+      "titulo": "📊 Resultados",
+      "instruccion": "Datos obtenidos (gráficos, tablas)",
+      "requerida": false,
+      "capitulo": false
+    },
+    "analisis_datos": {
+      "titulo": "📈 Análisis de Datos",
+      "instruccion": "Interpretación de resultados",
+      "requerida": false,
+      "capitulo": false
+    },
+    "capitulo6": {
+      "titulo": "💬 CAPÍTULO VI",
+      "instruccion": "Título de capítulo",
+      "requerida": false,
+      "capitulo": true
+    },
+    "discusion": {
+      "titulo": "💬 Discusión",
+      "instruccion": "Confronta resultados con teoría",
+      "requerida": false,
+      "capitulo": false
+    },
+    "conclusiones": {
+      "titulo": "✅ Conclusiones",
+      "instruccion": "Hallazgos principales y respuestas a objetivos",
+      "requerida": true,
+      "capitulo": false
+    }
+  },
+  "formato_config": {
+    "fuente_texto": "Calibri",
+    "tamaño_texto": 12,
+    "fuente_titulo": "Calibri",
+    "tamaño_titulo": 14,
+    "interlineado": 2.0,
+    "margen": 2.54,
+    "justificado": 1,
+    "sangria": 1
+  },
+  "imagenes": {
+    "encabezado_personalizado": null,
+    "insignia_personalizada": null
+  },
+  "estadisticas": {
+    "total_words": 278,
+    "total_chars": 1598,
+    "sections_completed": 14,
+    "references_added": 0
+  }
+}
