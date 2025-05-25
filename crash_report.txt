@@ -1,0 +1,23 @@
+Crash Report - Generador de Proyectos Académicos v2.0
+============================================================
+Timestamp: UTC
+Python: 3.9.13 (tags/v3.9.13:6de2ca5, May 17 2022, 16:36:42) [MSC v.1929 64 bit (AMD64)]
+OS: win32
+============================================================
+
+Traceback (most recent call last):
+  File "C:\Users\Zolu\Downloads\Word with Claude\Beta\Word-With-Claude\main.py", line 89, in main
+    app = ProyectoAcademicoGenerator()
+  File "C:\Users\Zolu\Downloads\Word with Claude\Beta\Word-With-Claude\ui\main_window.py", line 65, in __init__
+    self.setup_ui()
+  File "C:\Users\Zolu\Downloads\Word with Claude\Beta\Word-With-Claude\ui\main_window.py", line 192, in setup_ui
+    self._create_tabs()
+  File "C:\Users\Zolu\Downloads\Word with Claude\Beta\Word-With-Claude\ui\main_window.py", line 208, in _create_tabs
+    self.contenido_dinamico_tab = ContenidoDinamicoTab(tab2, self)
+  File "C:\Users\Zolu\Downloads\Word with Claude\Beta\Word-With-Claude\ui\tabs\contenido_dinamico.py", line 18, in __init__
+    self.setup_ui()
+  File "C:\Users\Zolu\Downloads\Word with Claude\Beta\Word-With-Claude\ui\tabs\contenido_dinamico.py", line 27, in setup_ui
+    self.create_control_panel(paned_window)
+  File "C:\Users\Zolu\Downloads\Word with Claude\Beta\Word-With-Claude\ui\tabs\contenido_dinamico.py", line 50, in create_control_panel
+    command=self.app.toggle_sidebar,
+AttributeError: 'ProyectoAcademicoGenerator' object has no attribute 'toggle_sidebar'
